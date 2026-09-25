@@ -16,9 +16,11 @@ Jev and fake Apprise, and a dependency audit. The initial public GitHub Actions 
 including the built-image smoke and candidate-image publication. The protected real-Jev
 contract check
 [ran and passed](https://github.com/kavishwar-khankari/perry-the-platypus/actions/runs/36127778732)
-on 2026-09-25 (model `jev-1.13-free`, one invented event, no notification). Perry has
-**not** called real Apprise, sent a phone alert, deployed to Kubernetes, run a load gate,
-or validated a rollback yet. Update this paragraph only when checks actually run.
+on 2026-09-25 (model `jev-1.13-free`, one invented event, no notification). GitOps staging
+deployed the tested digest and its smoke Job passed with real Jev, a stored decision, one
+fake-sink notification, and maintenance suppression. Perry has **not** called real Apprise,
+sent a phone alert, promoted to production, run a load gate, or validated a rollback yet.
+Update this paragraph only when checks actually run.
 
 ## One exact scenario
 
@@ -102,16 +104,18 @@ the decision model is externally hosted.
 | Local and public PR CI | Deterministic fake / fake | Reproducible behavior; does not verify real services |
 | Protected manual CI workflow | Real Jev / none | Synthetic API contract only (run 2026-09-25); no phone or homelab data |
 | Built-image smoke | HTTP fakes / fake | The built container's API, DB, provider and notification wiring |
-| GitOps staging **(review-only PR)** | Real Jev with synthetic input / disposable sidecar sink | In-cluster wiring and release smoke after ArgoCD sync |
+| GitOps staging (validated 2026-09-25) | Real Jev with synthetic input / disposable sidecar sink | In-cluster wiring and release smoke after ArgoCD sync; `alert`=1, `suppressed`=1 recorded |
 | Homelab production **(planned)** | Real Jev with synthetic input / existing Apprise | One gated phone test; no live metric ingestion |
 
 CI runs quick quality, dependency audit, and secret scanning in parallel; then builds
 one candidate image and checks it with fake HTTP services. Successful `main` builds
 publish a commit-SHA-tagged candidate to GHCR and report its immutable digest. **Image
-publication is not a deployment.** Staging manifests are under review in
-[kubernetes-homelab PR #157](https://github.com/kavishwar-khankari/kubernetes-homelab/pull/157),
-pinned to the tested image digest; nothing is merged or deployed yet. Production promotion
-and rollback remain unimplemented; no release parity or rollback is claimed.
+publication is not a deployment.** Staging was deployed from
+[kubernetes-homelab PR #157](https://github.com/kavishwar-khankari/kubernetes-homelab/pull/157)
+(merged), pinned to the tested image digest. Its PostSync Job passed with real Jev and the
+loopback fake sink, and the private ingress needed a follow-up egress-allowlist fix
+([PR #158](https://github.com/kavishwar-khankari/kubernetes-homelab/pull/158)). Production
+promotion and rollback remain unimplemented; no release parity or rollback is claimed.
 
 `perry.staging_sink:app` is a staging-only in-memory fake receiver available in the
 same image. It accepts notifications without contacting ntfy or Telegram and exposes a
