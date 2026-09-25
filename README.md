@@ -13,10 +13,12 @@ synthetic POST /events → CPU/error safety rules → Zen Jev Choice (alert|igno
 **Current evidence:** local pytest/BDD, HTTP-contract fakes, a built-image smoke with fake
 Jev and fake Apprise, and a dependency audit. The initial public GitHub Actions run
 [passed](https://github.com/kavishwar-khankari/perry-the-platypus/actions/runs/36124340896),
-including the built-image smoke and candidate-image publication. The owner separately
-verified one synthetic Choice request against real Zen Jev before Perry existed. Perry has
-**not** called real Jev or Apprise, sent a phone alert, deployed to Kubernetes, run a load
-gate, or validated a rollback yet. Update this paragraph only when checks actually run.
+including the built-image smoke and candidate-image publication. The protected real-Jev
+contract check
+[ran and passed](https://github.com/kavishwar-khankari/perry-the-platypus/actions/runs/36127778732)
+on 2026-09-25 (model `jev-1.13-free`, one invented event, no notification). Perry has
+**not** called real Apprise, sent a phone alert, deployed to Kubernetes, run a load gate,
+or validated a rollback yet. Update this paragraph only when checks actually run.
 
 ## One exact scenario
 
@@ -70,13 +72,15 @@ HTTP request shapes without any real network call.
 ## Check real Jev separately
 
 The owner has already verified that their key can call
-`https://opencode.ai/zen/v1/systemone` with model `jev-1.13-free`. For Perry's own
-contract check, place `PERRY_ZEN_API_KEY` in your **local environment** or the protected
+`https://opencode.ai/zen/v1/systemone` with model `jev-1.13-free`, and Perry's own
+contract check has run the same way: the manually dispatched workflow passed on 2026-09-25.
+To re-run it, place `PERRY_ZEN_API_KEY` in your **local environment** or the protected
 GitHub `jev-contract` environment and run `uv run python scripts/check_zen.py` (or manually
 dispatch the corresponding workflow). It sends exactly one small invented event and
-**cannot notify Apprise**. Do not paste the key into an issue, file, or command argument.
-Free-model availability and provider behavior may change. A successful contract call
-checks protocol/authorization, not Jev's accuracy on real incidents.
+**cannot notify Apprise**. Add required reviewers to the `jev-contract` environment so the
+real call stays manually gated. Do not paste the key into an issue, file, or command
+argument. Free-model availability and provider behavior may change. A successful contract
+call checks protocol/authorization, not Jev's accuracy on real incidents.
 
 To run the full app, use `uv run uvicorn perry.app:app --host 127.0.0.1 --port 8000`.
 By default it has no configured key or notifier and authorizes **no event IDs**. To make
@@ -96,7 +100,7 @@ the decision model is externally hosted.
 | Where | Model / notifier | What the check means |
 | --- | --- | --- |
 | Local and public PR CI | Deterministic fake / fake | Reproducible behavior; does not verify real services |
-| Protected manual CI workflow | Real Jev / none | Synthetic API contract only; no phone or homelab data |
+| Protected manual CI workflow | Real Jev / none | Synthetic API contract only (run 2026-09-25); no phone or homelab data |
 | Built-image smoke | HTTP fakes / fake | The built container's API, DB, provider and notification wiring |
 | GitOps staging **(review-only PR)** | Real Jev with synthetic input / disposable sidecar sink | In-cluster wiring and release smoke after ArgoCD sync |
 | Homelab production **(planned)** | Real Jev with synthetic input / existing Apprise | One gated phone test; no live metric ingestion |
