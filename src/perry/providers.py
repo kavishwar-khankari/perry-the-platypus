@@ -57,12 +57,14 @@ class AppriseNotifier:
                 self.url, json={"title": title, "body": body, "type": "warning"}
             )
             response.raise_for_status()
-            if response.content.strip():
-                # The homelab Apprise image answers 204 with an empty body on success; a body
-                # that claims success:false is still a rejection.
+            content = response.content.strip()
+            if content:
+                # The homelab Apprise image answers 204 with an empty body, or 200 with
+                # {"error": null, "details": [...]} on success. Failures use 4xx with a
+                # non-null "error"; a body that claims failure is still a rejection.
                 try:
-                    accepted = json.loads(response.content).get("success") is True
+                    payload = json.loads(content)
                 except ValueError:
-                    accepted = False
-                if not accepted:
+                    raise ValueError("Apprise returned an unrecognized response") from None
+                if payload.get("success") is False or payload.get("error"):
                     raise ValueError("Apprise did not accept notification")

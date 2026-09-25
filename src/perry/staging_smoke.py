@@ -15,15 +15,17 @@ def request(url: str, body: dict | None = None) -> dict:
         return json.load(response)
 
 
-def wait_until_healthy(base: str) -> None:
+def wait_until_ready(base: str, sink: str) -> None:
     for _ in range(60):
         try:
-            if request(f"{base}/healthz") == {"status": "ok"}:
+            if request(f"{base}/healthz") == {"status": "ok"} and "count" in request(
+                f"{sink}/calls"
+            ):
                 return
         except (OSError, urllib.error.URLError):
             pass
         time.sleep(5)
-    raise AssertionError("Staging service is not healthy")
+    raise AssertionError("Staging service or fake sink is not ready")
 
 
 def main() -> None:
@@ -32,7 +34,7 @@ def main() -> None:
     event_id = os.getenv("PERRY_STAGE_EVENT_ID") or (
         os.environ["PERRY_STAGE_EVENT_PREFIX"] + uuid.uuid4().hex
     )
-    wait_until_healthy(base)
+    wait_until_ready(base, sink)
     initial_count = request(f"{sink}/calls")["count"]
     event = {
         "event_id": event_id,
@@ -52,8 +54,8 @@ def main() -> None:
         )
     if request(f"{base}/decisions/{event_id}")["status"] != "alert":
         raise AssertionError("Staging decision was not persisted")
-    before = request(f"{sink}/calls")["count"]
-    if before != initial_count + 1:
+    after_positive = request(f"{sink}/calls")["count"]
+    if after_positive != initial_count + 1:
         raise AssertionError("Staging sink did not receive exactly one new alert")
     negative = request(
         f"{base}/events", {**event, "event_id": f"{event_id}-maint", "maintenance": True}
@@ -62,7 +64,7 @@ def main() -> None:
         raise AssertionError(
             f"Maintenance was not suppressed correctly: {negative['status']}/{negative['reason']}"
         )
-    if request(f"{sink}/calls")["count"] != before:
+    if request(f"{sink}/calls")["count"] != after_positive:
         raise AssertionError("Maintenance reached the notification sink")
     print("Staging smoke passed: real Jev Choice, stored decision, fake sink, no-alert.")
 

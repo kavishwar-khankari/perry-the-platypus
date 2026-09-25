@@ -66,3 +66,28 @@ def test_apprise_empty_204_is_accepted_like_the_homelab_image():
         transport=httpx.MockTransport(lambda _: httpx.Response(204)),
     )
     asyncio.run(notifier.send("Synthetic", "Demo only"))
+
+
+def test_apprise_real_success_body_is_accepted():
+    body = {
+        "error": None,
+        "details": [["INFO", "2026-09-25 11:28:46", "Sent Telegram notification."]],
+    }
+    notifier = AppriseNotifier(
+        "http://apprise.test/notify/global",
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=body)),
+    )
+    asyncio.run(notifier.send("Synthetic", "Demo only"))
+
+
+def test_apprise_200_with_an_error_field_is_rejected():
+    notifier = AppriseNotifier(
+        "http://apprise.test/notify/global",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200, json={"error": "One or more notification could not be sent"}
+            )
+        ),
+    )
+    with pytest.raises(ValueError, match="did not accept"):
+        asyncio.run(notifier.send("Synthetic", "Demo only"))
