@@ -17,10 +17,13 @@ including the built-image smoke and candidate-image publication. The protected r
 contract check
 [ran and passed](https://github.com/kavishwar-khankari/perry-the-platypus/actions/runs/36127778732)
 on 2026-09-25 (model `jev-1.13-free`, one invented event, no notification). GitOps staging
-deployed the tested digest and its smoke Job passed with real Jev, a stored decision, one
-fake-sink notification, and maintenance suppression. Perry has **not** called real Apprise,
-sent a phone alert, promoted to production, run a load gate, or validated a rollback yet.
-Update this paragraph only when checks actually run.
+and production both deployed a staging-tested digest; each PostSync smoke passed with real
+Jev, stored decisions, and no unintended notification. The single authorized phone test was
+delivered by Apprise to ntfy and Telegram, but Perry recorded `delivery_failed` because the
+real Apprise success body (`{"error": null, "details": [...]}`) did not match the assumed
+`success: true`; the contract was fixed and promoted, and the test was not re-sent. Perry
+has **not** run a load gate or validated a rollback yet. Update this paragraph only when
+checks actually run.
 
 ## One exact scenario
 
@@ -105,17 +108,20 @@ the decision model is externally hosted.
 | Protected manual CI workflow | Real Jev / none | Synthetic API contract only (run 2026-09-25); no phone or homelab data |
 | Built-image smoke | HTTP fakes / fake | The built container's API, DB, provider and notification wiring |
 | GitOps staging (validated 2026-09-25) | Real Jev with synthetic input / disposable sidecar sink | In-cluster wiring and release smoke after ArgoCD sync; `alert`=1, `suppressed`=1 recorded |
-| Homelab production **(planned)** | Real Jev with synthetic input / existing Apprise | One gated phone test; no live metric ingestion |
+| Homelab production (validated 2026-09-25) | Real Jev with synthetic input / existing Apprise | Deployed on the staging-tested digest; smoke proves unauthorized + maintenance events never notify; one authorized phone message was delivered |
 
 CI runs quick quality, dependency audit, and secret scanning in parallel; then builds
 one candidate image and checks it with fake HTTP services. Successful `main` builds
 publish a commit-SHA-tagged candidate to GHCR and report its immutable digest. **Image
-publication is not a deployment.** Staging was deployed from
+publication is not a deployment.** The GitOps path has now been exercised end to end:
+staging was deployed from
 [kubernetes-homelab PR #157](https://github.com/kavishwar-khankari/kubernetes-homelab/pull/157)
-(merged), pinned to the tested image digest. Its PostSync Job passed with real Jev and the
-loopback fake sink, and the private ingress needed a follow-up egress-allowlist fix
-([PR #158](https://github.com/kavishwar-khankari/kubernetes-homelab/pull/158)). Production
-promotion and rollback remain unimplemented; no release parity or rollback is claimed.
+(merged), needed a private-ingress egress-allowlist fix
+([PR #158](https://github.com/kavishwar-khankari/kubernetes-homelab/pull/158)), and its
+PostSync Job passed with real Jev and the loopback fake sink. A later digest was validated
+in staging and then copied to production by a reviewed digest PR that changed nothing else.
+Production promotion is no longer unimplemented; a rollback exercise is still unrun, so no
+rollback is claimed.
 
 `perry.staging_sink:app` is a staging-only in-memory fake receiver available in the
 same image. It accepts notifications without contacting ntfy or Telegram and exposes a
@@ -124,12 +130,12 @@ counter for the GitOps PostSync smoke Job. It is never started in production.
 refuses that prefix unless the notifier is loopback, so a staging misconfiguration cannot
 reach a phone.
 
-The eventual GitOps path is a reviewed PR updating the staging digest in
+The GitOps path that was exercised is a reviewed PR updating the staging digest in
 `kubernetes-homelab`, ArgoCD reconciliation and in-cluster smoke checks, followed by a
-separate reviewed PR copying that **same digest** to production. Rollback changes the
-desired digest back in Git. The GitOps repo must never contain the Zen key; its existing
-DopplerSecret pattern supplies runtime credentials. No direct `kubectl apply`, patch, or
-imperative rollout is part of the release plan.
+separate reviewed PR copying that **same digest** to production. Rollback would change the
+desired digest back in Git and is not yet exercised. The GitOps repo never contains the Zen
+key; its existing DopplerSecret pattern supplies runtime credentials. No direct `kubectl
+apply`, patch, or imperative rollout is part of the release plan.
 
 ## Failure reporting and scope
 
