@@ -1,0 +1,22 @@
+name: Real Jev contract (synthetic only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  contract:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: jev-contract
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --python 3.13
+      - name: Check structured reply; never send a notification
+        env:
+          PERRY_ZEN_API_KEY: ${{ secrets.PERRY_ZEN_API_KEY }}
+        run: uv run python scripts/check_zen.py

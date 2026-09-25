@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "perry-the-platypus"
+version = "0.1.0"
+description = "A synthetic-telemetry decision pipeline for testing GitOps releases"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "prometheus-client>=0.21,<1",
+  "uvicorn>=0.34,<1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8,<10",
+  "pytest-bdd>=8,<10",
+  "ruff>=0.11,<1",
+  "ty==0.0.84",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/perry"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: tests of external HTTP contracts using local test servers"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
