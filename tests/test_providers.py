@@ -49,3 +49,20 @@ def test_apprise_receives_a_fixed_json_shape():
         "http://apprise.test/notify/global", transport=httpx.MockTransport(handler)
     )
     asyncio.run(notifier.send("[PERRY POC — SYNTHETIC] Example", "Invented event only"))
+
+
+def test_apprise_rejection_in_successful_http_response_is_not_counted_as_accepted():
+    notifier = AppriseNotifier(
+        "http://apprise.test/notify/global",
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"success": False})),
+    )
+    with pytest.raises(ValueError, match="did not accept"):
+        asyncio.run(notifier.send("Synthetic", "Demo only"))
+
+
+def test_apprise_empty_204_is_accepted_like_the_homelab_image():
+    notifier = AppriseNotifier(
+        "http://apprise.test/notify/global",
+        transport=httpx.MockTransport(lambda _: httpx.Response(204)),
+    )
+    asyncio.run(notifier.send("Synthetic", "Demo only"))

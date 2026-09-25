@@ -44,7 +44,9 @@ class Handler(BaseHTTPRequestHandler):
             )
         elif self.path == "/notify/global":
             calls["apprise"].append(body)
-            self.respond(200, {"success": True})
+            # Match the homelab Apprise image's real success contract: 204, empty body.
+            self.send_response(204)
+            self.end_headers()
         else:
             self.respond(404, {"error": "not found"})
 

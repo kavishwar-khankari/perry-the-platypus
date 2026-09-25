@@ -1,13 +1,15 @@
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import time
 from pathlib import Path
 from typing import Annotated, Literal, Protocol
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
@@ -15,10 +17,12 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Event(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     event_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     source: Literal["synthetic"]
     node: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
@@ -105,14 +109,25 @@ def create_app(
     model_id: str = "jev-1.13-free",
     min_confidence: float = 0.7,
     allowed_event_id: str | None = None,
+    allowed_event_prefix: str | None = None,
 ) -> FastAPI:
     if not 0 <= min_confidence <= 1:
         raise ValueError("min_confidence must be between 0 and 1")
+    if allowed_event_prefix is not None:
+        if not re.fullmatch(r"[a-z0-9_-]{1,20}", allowed_event_prefix):
+            raise ValueError("Invalid staging event prefix")
+        if allowed_event_id is not None:
+            raise ValueError("Exact event ID and staging prefix cannot be combined")
     store = DecisionStore(db_path)
     registry = CollectorRegistry()
     outcomes = Counter("perry_decisions_total", "Recorded decisions", ["status"], registry=registry)
     duration = Histogram("perry_event_seconds", "Event processing time", registry=registry)
     app = FastAPI(title="Perry", version="0.1.0")
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_request: Request, _error: RequestValidationError) -> JSONResponse:
+        # FastAPI's default detail includes `input`, which can echo rejected private telemetry.
+        return JSONResponse(status_code=422, content={"detail": "Invalid event payload"})
 
     @app.get("/healthz")
     def healthz() -> dict:
@@ -165,7 +180,12 @@ def create_app(
                 record.update(status="suppressed", reason="maintenance")
             elif cpu_average < 90 or window_seconds < 300 or event.http_error_percent < 5:
                 record.update(status="suppressed", reason="below_hard_rules")
-            elif allowed_event_id is not None and event.event_id != allowed_event_id:
+            elif not (
+                (allowed_event_id is None or event.event_id == allowed_event_id)
+                and (
+                    allowed_event_prefix is None or event.event_id.startswith(allowed_event_prefix)
+                )
+            ):
                 record.update(status="held", reason="notification_not_authorized")
             else:
                 try:
@@ -220,6 +240,12 @@ def create_app(
 def from_environment() -> FastAPI:
     from perry.providers import AppriseNotifier, ZenJev
 
+    prefix = os.getenv("PERRY_STAGE_EVENT_PREFIX") or None
+    notifier_url = os.getenv("PERRY_APPRISE_URL", "")
+    if prefix and notifier_url != "http://127.0.0.1:18081/notify/global":
+        raise ValueError("Staging event prefix requires the loopback fake sink")
+    if prefix and os.getenv("PERRY_APPROVED_EVENT_ID"):
+        raise ValueError("Staging event prefix cannot authorize a phone event ID")
     return create_app(
         db_path=Path(os.getenv("PERRY_DB_PATH", "/tmp/opencode/perry.sqlite")),
         model=ZenJev(
@@ -227,10 +253,11 @@ def from_environment() -> FastAPI:
             model_id=os.getenv("PERRY_JEV_MODEL", "jev-1.13-free"),
             url=os.getenv("PERRY_ZEN_URL", "https://opencode.ai/zen/v1/systemone"),
         ),
-        notifier=AppriseNotifier(os.getenv("PERRY_APPRISE_URL", "")),
+        notifier=AppriseNotifier(notifier_url),
         model_id=os.getenv("PERRY_JEV_MODEL", "jev-1.13-free"),
         min_confidence=float(os.getenv("PERRY_MIN_CONFIDENCE", "0.7")),
-        allowed_event_id=os.getenv("PERRY_APPROVED_EVENT_ID", ""),
+        allowed_event_id=None if prefix else os.getenv("PERRY_APPROVED_EVENT_ID", ""),
+        allowed_event_prefix=prefix,
     )
 
 

@@ -11,10 +11,17 @@ The `confidence` field is not a measured probability that an alert is correct.
 
 Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run ty check src`, and
 `uv run pytest -q` before committing. CI uses a fake Jev and fake notification receiver.
-Real Jev contract checks use
-invented input on a trusted runner; only an explicitly authorized manual test reaches the
-real Apprise `global` key. Report simulated and real checks separately. A release, performance
-gate, or rollback counts as validated only after its check actually runs.
+Real Jev contract checks use invented input on a trusted runner; only an explicitly
+authorized manual test reaches the real Apprise `global` key. Report simulated and real
+checks separately. A release, performance gate, or rollback counts as validated only after
+its check actually runs.
+
+## Staging safety
+
+Staging runs in its own namespace with the real Jev key from Doppler and a disposable fake
+notification sink. It authorizes only event IDs with the configured `PERRY_STAGE_EVENT_PREFIX`,
+and `from_environment` refuses that prefix unless the notifier URL is the loopback fake sink,
+so a staging misconfiguration cannot message a phone.
 
 ## Homelab deployment
 

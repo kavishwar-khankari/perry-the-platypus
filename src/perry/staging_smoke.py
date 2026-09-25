@@ -1,0 +1,53 @@
+"""Runs inside a GitOps-managed staging Job, not on a public CI runner."""
+
+import json
+import os
+import urllib.request
+import uuid
+
+
+def request(url: str, body: dict | None = None) -> dict:
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as response:
+        return json.load(response)
+
+
+def main() -> None:
+    base = os.environ["PERRY_STAGE_URL"].rstrip("/")
+    sink = os.environ["PERRY_STAGE_SINK_URL"].rstrip("/")
+    event_id = os.getenv("PERRY_STAGE_EVENT_ID") or (
+        os.environ["PERRY_STAGE_EVENT_PREFIX"] + uuid.uuid4().hex
+    )
+    if request(f"{base}/healthz") != {"status": "ok"}:
+        raise AssertionError("Staging service is not healthy")
+    initial_count = request(f"{sink}/calls")["count"]
+    event = {
+        "event_id": event_id,
+        "source": "synthetic",
+        "node": "demo-staging-node",
+        "cpu_samples_percent": [94, 95, 96, 97, 96, 98],
+        "sample_interval_seconds": 60,
+        "http_error_percent": 8,
+        "maintenance": False,
+    }
+    positive = request(f"{base}/events", event)
+    if positive["status"] != "alert" or positive["choice"] != "alert":
+        raise AssertionError("Real Jev did not permit this synthetic staging alert")
+    if request(f"{base}/decisions/{event_id}")["status"] != "alert":
+        raise AssertionError("Staging decision was not persisted")
+    before = request(f"{sink}/calls")["count"]
+    if before != initial_count + 1:
+        raise AssertionError("Staging sink did not receive exactly one new alert")
+    negative = request(
+        f"{base}/events", {**event, "event_id": f"{event_id}-maint", "maintenance": True}
+    )
+    if negative["status"] != "suppressed":
+        raise AssertionError("Maintenance was not suppressed")
+    if request(f"{sink}/calls")["count"] != before:
+        raise AssertionError("Maintenance reached the notification sink")
+    print("Staging smoke passed: real Jev Choice, stored decision, fake sink, no-alert.")
+
+
+if __name__ == "__main__":
+    main()

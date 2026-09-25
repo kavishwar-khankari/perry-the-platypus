@@ -11,9 +11,11 @@ synthetic POST /events → CPU/error safety rules → Zen Jev Choice (alert|igno
 ```
 
 **Current evidence:** local pytest/BDD, HTTP-contract fakes, a built-image smoke with fake
-Jev and fake Apprise, and a dependency audit. The owner separately verified one synthetic
-Choice request against real Zen Jev before Perry existed. Perry has **not** called real
-Jev or Apprise, sent a phone alert, passed GitHub Actions, deployed to Kubernetes, run a load
+Jev and fake Apprise, and a dependency audit. The initial public GitHub Actions run
+[passed](https://github.com/kavishwar-khankari/perry-the-platypus/actions/runs/36124340896),
+including the built-image smoke and candidate-image publication. The owner separately
+verified one synthetic Choice request against real Zen Jev before Perry existed. Perry has
+**not** called real Jev or Apprise, sent a phone alert, deployed to Kubernetes, run a load
 gate, or validated a rollback yet. Update this paragraph only when checks actually run.
 
 ## One exact scenario
@@ -96,7 +98,7 @@ the decision model is externally hosted.
 | Local and public PR CI | Deterministic fake / fake | Reproducible behavior; does not verify real services |
 | Protected manual CI workflow | Real Jev / none | Synthetic API contract only; no phone or homelab data |
 | Built-image smoke | HTTP fakes / fake | The built container's API, DB, provider and notification wiring |
-| GitOps staging **(planned)** | Real Jev with synthetic input / fake sink | In-cluster wiring and release smoke after ArgoCD sync |
+| GitOps staging **(planned)** | Real Jev with synthetic input / disposable sidecar sink | In-cluster wiring and release smoke after ArgoCD sync |
 | Homelab production **(planned)** | Real Jev with synthetic input / existing Apprise | One gated phone test; no live metric ingestion |
 
 CI runs quick quality, dependency audit, and secret scanning in parallel; then builds
@@ -104,6 +106,10 @@ one candidate image and checks it with fake HTTP services. Successful `main` bui
 publish a commit-SHA-tagged candidate to GHCR and report its immutable digest. **Image
 publication is not a deployment.** Homelab staging/prod manifests and cross-repo digest
 promotion are not yet implemented; no release parity or rollback is claimed.
+
+`perry.staging_sink:app` is a staging-only in-memory fake receiver available in the
+same image. It accepts notifications without contacting ntfy or Telegram and exposes a
+counter for the GitOps PostSync smoke Job. It is never started in production.
 
 The eventual GitOps path is a reviewed PR updating the staging digest in
 `kubernetes-homelab`, ArgoCD reconciliation and in-cluster smoke checks, followed by a

@@ -129,6 +129,15 @@ def test_only_synthetic_validated_events_are_accepted(harness):
     assert notifier.messages == []
 
 
+def test_extra_telemetry_cannot_be_hidden_in_a_synthetic_event(harness):
+    client, model, notifier = harness
+    response = client.post("/events", json={**EVENT, "raw_metrics": {"private": "data"}})
+    assert response.status_code == 422
+    assert "private" not in response.text
+    assert model.calls == 0
+    assert notifier.messages == []
+
+
 def test_environment_style_allowlist_prevents_unapproved_phone_alerts(tmp_path):
     model, notifier = FakeModel(), FakeNotifier()
     client = TestClient(
@@ -144,6 +153,34 @@ def test_environment_style_allowlist_prevents_unapproved_phone_alerts(tmp_path):
     assert result.json()["reason"] == "notification_not_authorized"
     assert model.calls == 0
     assert notifier.messages == []
+
+
+def test_staging_event_prefix_allows_new_synthetic_checks_but_holds_other_ids(tmp_path):
+    model, notifier = FakeModel(), FakeNotifier()
+    client = TestClient(
+        create_app(
+            db_path=tmp_path / "staging.sqlite",
+            model=model,
+            notifier=notifier,
+            allowed_event_prefix="stage-",
+        )
+    )
+    assert (
+        client.post("/events", json={**EVENT, "event_id": "stage-demo-1"}).json()["status"]
+        == "alert"
+    )
+    assert client.post("/events", json={**EVENT, "event_id": "demo-002"}).json()["status"] == "held"
+    assert model.calls == 1
+    assert len(notifier.messages) == 1
+
+
+def test_staging_prefix_cannot_be_configured_with_real_apprise(monkeypatch):
+    from perry.app import from_environment
+
+    monkeypatch.setenv("PERRY_STAGE_EVENT_PREFIX", "stage-")
+    monkeypatch.setenv("PERRY_APPRISE_URL", "http://apprise.apprise.svc/notify/global")
+    with pytest.raises(ValueError, match="loopback fake sink"):
+        from_environment()
 
 
 def test_health_metrics_and_missing_decision(harness):

@@ -1,5 +1,7 @@
 """The two outbound HTTP boundaries; only synthetic state reaches hosted Jev."""
 
+import json
+
 import httpx
 
 QUESTION = {
@@ -55,3 +57,12 @@ class AppriseNotifier:
                 self.url, json={"title": title, "body": body, "type": "warning"}
             )
             response.raise_for_status()
+            if response.content.strip():
+                # The homelab Apprise image answers 204 with an empty body on success; a body
+                # that claims success:false is still a rejection.
+                try:
+                    accepted = json.loads(response.content).get("success") is True
+                except ValueError:
+                    accepted = False
+                if not accepted:
+                    raise ValueError("Apprise did not accept notification")
