@@ -2,6 +2,8 @@
 
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 import uuid
 
@@ -13,14 +15,24 @@ def request(url: str, body: dict | None = None) -> dict:
         return json.load(response)
 
 
+def wait_until_healthy(base: str) -> None:
+    for _ in range(60):
+        try:
+            if request(f"{base}/healthz") == {"status": "ok"}:
+                return
+        except (OSError, urllib.error.URLError):
+            pass
+        time.sleep(5)
+    raise AssertionError("Staging service is not healthy")
+
+
 def main() -> None:
     base = os.environ["PERRY_STAGE_URL"].rstrip("/")
     sink = os.environ["PERRY_STAGE_SINK_URL"].rstrip("/")
     event_id = os.getenv("PERRY_STAGE_EVENT_ID") or (
         os.environ["PERRY_STAGE_EVENT_PREFIX"] + uuid.uuid4().hex
     )
-    if request(f"{base}/healthz") != {"status": "ok"}:
-        raise AssertionError("Staging service is not healthy")
+    wait_until_healthy(base)
     initial_count = request(f"{sink}/calls")["count"]
     event = {
         "event_id": event_id,
