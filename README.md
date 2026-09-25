@@ -98,18 +98,23 @@ the decision model is externally hosted.
 | Local and public PR CI | Deterministic fake / fake | Reproducible behavior; does not verify real services |
 | Protected manual CI workflow | Real Jev / none | Synthetic API contract only; no phone or homelab data |
 | Built-image smoke | HTTP fakes / fake | The built container's API, DB, provider and notification wiring |
-| GitOps staging **(planned)** | Real Jev with synthetic input / disposable sidecar sink | In-cluster wiring and release smoke after ArgoCD sync |
+| GitOps staging **(review-only PR)** | Real Jev with synthetic input / disposable sidecar sink | In-cluster wiring and release smoke after ArgoCD sync |
 | Homelab production **(planned)** | Real Jev with synthetic input / existing Apprise | One gated phone test; no live metric ingestion |
 
 CI runs quick quality, dependency audit, and secret scanning in parallel; then builds
 one candidate image and checks it with fake HTTP services. Successful `main` builds
 publish a commit-SHA-tagged candidate to GHCR and report its immutable digest. **Image
-publication is not a deployment.** Homelab staging/prod manifests and cross-repo digest
-promotion are not yet implemented; no release parity or rollback is claimed.
+publication is not a deployment.** Staging manifests are under review in
+[kubernetes-homelab PR #157](https://github.com/kavishwar-khankari/kubernetes-homelab/pull/157),
+pinned to the tested image digest; nothing is merged or deployed yet. Production promotion
+and rollback remain unimplemented; no release parity or rollback is claimed.
 
 `perry.staging_sink:app` is a staging-only in-memory fake receiver available in the
 same image. It accepts notifications without contacting ntfy or Telegram and exposes a
 counter for the GitOps PostSync smoke Job. It is never started in production.
+`PERRY_STAGE_EVENT_PREFIX` authorizes only prefixed event IDs, and `from_environment`
+refuses that prefix unless the notifier is loopback, so a staging misconfiguration cannot
+reach a phone.
 
 The eventual GitOps path is a reviewed PR updating the staging digest in
 `kubernetes-homelab`, ArgoCD reconciliation and in-cluster smoke checks, followed by a
