@@ -6,6 +6,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import Annotated, Literal, Protocol
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -242,7 +243,7 @@ def from_environment() -> FastAPI:
 
     prefix = os.getenv("PERRY_STAGE_EVENT_PREFIX") or None
     notifier_url = os.getenv("PERRY_APPRISE_URL", "")
-    if prefix and notifier_url != "http://127.0.0.1:18081/notify/global":
+    if prefix and urlparse(notifier_url).hostname not in {"127.0.0.1", "localhost", "::1"}:
         raise ValueError("Staging event prefix requires the loopback fake sink")
     if prefix and os.getenv("PERRY_APPROVED_EVENT_ID"):
         raise ValueError("Staging event prefix cannot authorize a phone event ID")

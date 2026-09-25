@@ -15,7 +15,7 @@ def test_post_sync_journey_requires_real_decision_and_no_maintenance_message(mon
         if url.endswith("/events"):
             submitted.append(body)
             return (
-                {"status": "suppressed"}
+                {"status": "suppressed", "reason": "maintenance"}
                 if body["maintenance"]
                 else {"status": "alert", "choice": "alert"}
             )

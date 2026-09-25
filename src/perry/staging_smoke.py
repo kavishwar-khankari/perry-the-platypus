@@ -33,7 +33,11 @@ def main() -> None:
     }
     positive = request(f"{base}/events", event)
     if positive["status"] != "alert" or positive["choice"] != "alert":
-        raise AssertionError("Real Jev did not permit this synthetic staging alert")
+        raise AssertionError(
+            "Staging recorded no alert: "
+            f"status={positive['status']} reason={positive['reason']} "
+            f"choice={positive['choice']}"
+        )
     if request(f"{base}/decisions/{event_id}")["status"] != "alert":
         raise AssertionError("Staging decision was not persisted")
     before = request(f"{sink}/calls")["count"]
@@ -42,8 +46,10 @@ def main() -> None:
     negative = request(
         f"{base}/events", {**event, "event_id": f"{event_id}-maint", "maintenance": True}
     )
-    if negative["status"] != "suppressed":
-        raise AssertionError("Maintenance was not suppressed")
+    if negative["status"] != "suppressed" or negative["reason"] != "maintenance":
+        raise AssertionError(
+            f"Maintenance was not suppressed correctly: {negative['status']}/{negative['reason']}"
+        )
     if request(f"{sink}/calls")["count"] != before:
         raise AssertionError("Maintenance reached the notification sink")
     print("Staging smoke passed: real Jev Choice, stored decision, fake sink, no-alert.")

@@ -183,6 +183,16 @@ def test_staging_prefix_cannot_be_configured_with_real_apprise(monkeypatch):
         from_environment()
 
 
+def test_staging_prefix_accepts_the_sidecar_sink_in_the_pod(monkeypatch, tmp_path):
+    from perry.app import from_environment
+
+    monkeypatch.setenv("PERRY_STAGE_EVENT_PREFIX", "stage-")
+    monkeypatch.setenv("PERRY_APPRISE_URL", "http://127.0.0.1:8080/notify/global")
+    monkeypatch.setenv("PERRY_DB_PATH", str(tmp_path / "staging.sqlite"))
+    app = from_environment()
+    assert app.title == "Perry"
+
+
 def test_health_metrics_and_missing_decision(harness):
     client, _, _ = harness
     assert client.get("/healthz").json() == {"status": "ok"}
